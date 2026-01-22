@@ -1,6 +1,6 @@
 # 🎮 Steam Price Monitor Bot
 
-![Project Progress](https://img.shields.io/badge/Progress-10%25-brightgreen?style=for-the-badge)
+![Project Progress](https://img.shields.io/badge/Progress-5%25-brightgreen?style=for-the-badge)
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python)
 ![Aiogram](https://img.shields.io/badge/Aiogram-3.x-00ADD8?style=for-the-badge)
 
