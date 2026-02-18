@@ -6,11 +6,12 @@ from typing import Optional, Dict
 import aiohttp
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.storage.memory import MemoryStorage
 
-BOT_TOKEN = ""
+BOT_TOKEN = "Bot_token"
 CHECK_INTERVAL = 3600
+AD_INTERVAL = 600
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -19,10 +20,17 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📊 Мои игры"), KeyboardButton(text="🔄 Проверить цены")],
-            [KeyboardButton(text="❓ Помощь"), KeyboardButton(text="⚙️ Настройки")]
+            [KeyboardButton(text="💳 Пополнить Steam"), KeyboardButton(text="❓ Помощь")],
+            [KeyboardButton(text="⚙️ Настройки")]
         ],
         resize_keyboard=True
     )
+
+def get_steam_refill_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Пополнить Steam со скидкой!", url="https://ggsel.net/catalog/product/3-popolnenie-steam-ua-ru-kz-sng-24-7-podarok-5051848")]
+    ])
+    return keyboard
 
 def init_db():
     conn = sqlite3.connect('steam_monitor.db')
@@ -38,6 +46,20 @@ def init_db():
                   last_notified_price REAL,
                   last_notified_discount INTEGER,
                   PRIMARY KEY (user_id, app_id))''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (user_id INTEGER PRIMARY KEY,
+                  first_seen TEXT,
+                  last_active TEXT)''')
+    conn.commit()
+    conn.close()
+
+def register_user(user_id: int):
+    conn = sqlite3.connect('steam_monitor.db')
+    c = conn.cursor()
+    now = datetime.now().isoformat()
+    c.execute("INSERT OR IGNORE INTO users (user_id, first_seen, last_active) VALUES (?, ?, ?)",
+              (user_id, now, now))
+    c.execute("UPDATE users SET last_active=? WHERE user_id=?", (now, user_id))
     conn.commit()
     conn.close()
 
@@ -71,6 +93,7 @@ async def get_game_info(app_id: int, region: str = 'ru') -> Optional[Dict]:
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    register_user(message.from_user.id)
     await message.answer(
         "🎮 <b>Steam Price Monitor Bot</b>\n\nОтслеживайте цены и скидки на игры в Steam!\n\n"
         "📎 <b>Просто отправь ссылку на игру</b> - я добавлю её в мониторинг\n\n"
@@ -81,6 +104,7 @@ async def cmd_start(message: types.Message):
 @dp.message(F.text == "❓ Помощь")
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
+    register_user(message.from_user.id)
     await message.answer(
         "📖 <b>Как пользоваться:</b>\n\n1️⃣ Скопируй ссылку на игру из Steam\n2️⃣ Отправь её мне\n"
         "3️⃣ Я добавлю игру в мониторинг\n4️⃣ Получай уведомления о любых изменениях цены!\n\n"
@@ -93,6 +117,7 @@ async def cmd_help(message: types.Message):
 @dp.message(F.text == "📊 Мои игры")
 @dp.message(Command("list"))
 async def cmd_list(message: types.Message):
+    register_user(message.from_user.id)
     conn = sqlite3.connect('steam_monitor.db')
     c = conn.cursor()
     c.execute("SELECT app_id, game_name, current_price, discount FROM monitored_games WHERE user_id=?", (message.from_user.id,))
@@ -114,6 +139,7 @@ async def cmd_list(message: types.Message):
 
 @dp.message(Command("remove"))
 async def cmd_remove(message: types.Message):
+    register_user(message.from_user.id)
     try:
         app_id = int(message.text.split()[1])
         conn = sqlite3.connect('steam_monitor.db')
@@ -132,12 +158,27 @@ async def cmd_remove(message: types.Message):
 @dp.message(F.text == "🔄 Проверить цены")
 @dp.message(Command("check"))
 async def cmd_check(message: types.Message):
+    register_user(message.from_user.id)
     await message.answer("🔄 Проверяю цены...", reply_markup=get_main_keyboard())
     await check_prices_for_user(message.from_user.id)
     await message.answer("✅ Проверка завершена!", reply_markup=get_main_keyboard())
 
+@dp.message(F.text == "💳 Пополнить Steam")
+async def cmd_refill(message: types.Message):
+    register_user(message.from_user.id)
+    await message.answer(
+        "💳 <b>Пополнение Steam со скидкой!</b>\n\n"
+        "🎁 Быстрое пополнение баланса Steam\n"
+        "✅ Работает для RU/UA/KZ/СНГ\n"
+        "⚡ Мгновенное зачисление 24/7\n"
+        "Нажми на кнопку ниже, чтобы пополнить баланс:",
+        parse_mode="HTML",
+        reply_markup=get_steam_refill_keyboard()
+    )
+
 @dp.message(F.text == "⚙️ Настройки")
 async def cmd_settings(message: types.Message):
+    register_user(message.from_user.id)
     conn = sqlite3.connect('steam_monitor.db')
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM monitored_games WHERE user_id=?", (message.from_user.id,))
@@ -151,6 +192,7 @@ async def cmd_settings(message: types.Message):
 
 @dp.message(F.text)
 async def handle_steam_link(message: types.Message):
+    register_user(message.from_user.id)
     if 'steampowered.com' not in message.text and 'steamcommunity.com' not in message.text:
         await message.answer("❌ Пожалуйста, отправьте ссылку на игру из Steam", reply_markup=get_main_keyboard())
         return
@@ -245,6 +287,43 @@ async def periodic_price_check():
         except:
             await asyncio.sleep(60)
 
+async def periodic_advertisement():
+    """Рассылка рекламы каждые 10 минут"""
+    while True:
+        try:
+            await asyncio.sleep(AD_INTERVAL)
+            conn = sqlite3.connect('steam_monitor.db')
+            c = conn.cursor()
+            c.execute("SELECT user_id FROM users")
+            users = c.fetchall()
+            conn.close()
+            
+            ad_message = (
+                "💎 <b>Специальное предложение!</b>\n\n"
+                "💳 Пополни баланс Steam со скидкой!\n\n"
+                "🎁 <b>Преимущества:</b>\n"
+                "✅ Мгновенное зачисление\n"
+                "✅ Работает 24/7\n"
+                "✅ Подарок к каждому пополнению\n"
+                "✅ Поддержка RU/UA/KZ/СНГ\n\n"
+                "👇 Жми на кнопку ниже!"
+            )
+            
+            for (user_id,) in users:
+                try:
+                    await bot.send_message(
+                        user_id,
+                        ad_message,
+                        parse_mode="HTML",
+                        reply_markup=get_steam_refill_keyboard()
+                    )
+                    await asyncio.sleep(1)  # Задержка между отправками, чтобы не получить бан
+                except Exception as e:
+                    # Игнорируем ошибки (например, если пользователь заблокировал бота)
+                    pass
+        except Exception as e:
+            await asyncio.sleep(60)
+
 async def main():
     init_db()
     try:
@@ -252,6 +331,7 @@ async def main():
     except:
         pass
     asyncio.create_task(periodic_price_check())
+    asyncio.create_task(periodic_advertisement())
     print("🚀 Бот запущен!")
     await dp.start_polling(bot)
 
