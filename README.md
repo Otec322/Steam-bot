@@ -10,7 +10,7 @@
 
 **Steam Price Monitor Bot** — это умный помощник для геймеров, который отслеживает цены на игры в Steam и моментально уведомляет об изменениях. Просто отправь ссылку на игру, и бот начнёт следить за ценой!
 
-<img width="1043" height="653" alt="diagram (4)" src="https://github.com/user-attachments/assets/6f33a73a-b31c-47bb-bd88-f0ebcd4392a8" />
+<img width="1350" height="725" alt="diagram (3)" src="https://github.com/user-attachments/assets/61a1ffca-cccb-4efa-8a91-4d8496b135c3" />
 
 
 ### ✨ Основные функции
